@@ -7,6 +7,58 @@ import (
 	"github.com/1core-dev/go-katas/shardedmap"
 )
 
+func TestSharedMapRace(t *testing.T) {
+	const (
+		ops    = 1000
+		shards = 8
+	)
+	m := shardedmap.New[int, int](shards)
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		for i := range ops {
+			m.Set(i, i)
+		}
+	})
+
+	wg.Go(func() {
+		for i := range ops {
+			m.Get(i)
+		}
+	})
+
+	wg.Go(func() {
+		for i := range ops {
+			m.Delete(i)
+		}
+	})
+
+	wg.Wait()
+}
+
+func TestShardedMapKeys(t *testing.T) {
+	const (
+		ops    = 1000
+		shards = 8
+	)
+	m := shardedmap.New[int, int](8)
+
+	for i := range ops {
+		m.Set(i, i)
+	}
+
+	if len(m.Keys()) != ops {
+		t.Fatalf("expected %d keys, got %d", ops, len(m.Keys()))
+	}
+
+	for _, k := range m.Keys() {
+		v, ok := m.Get(k)
+		if !ok || v != k {
+			t.Fatalf("key %d missing or wrong value %d", k, v)
+		}
+	}
+}
+
 func BenchmarkSharedMapSet(b *testing.B) {
 	tests := []struct {
 		shards uint64
@@ -36,28 +88,19 @@ func BenchmarkSharedMapSet(b *testing.B) {
 	}
 }
 
-func TestSharedMapRace(t *testing.T) {
-	const n = 1000
-	m := shardedmap.New[int, int](n)
-	var wg sync.WaitGroup
+func BenchmarkSharedMapMemory(b *testing.B) {
+	const (
+		ops    = 1000
+		shards = 8
+	)
+	m := shardedmap.New[int, int](8)
 
-	wg.Go(func() {
-		for i := range n {
-			m.Set(i, i)
-		}
-	})
+	b.ResetTimer()
+	for i := range ops {
+		m.Set(i, i)
+	}
 
-	wg.Go(func() {
-		for i := range n {
-			m.Get(i)
-		}
-	})
-
-	wg.Go(func() {
-		for i := range n {
-			m.Delete(i)
-		}
-	})
-
-	wg.Wait()
+	if len(m.Keys()) != ops {
+		b.Fatalf("expected %d keys, got %d", len(m.Keys()), ops)
+	}
 }
